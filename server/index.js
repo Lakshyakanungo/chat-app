@@ -1,8 +1,14 @@
+require("dotenv").config();
+// console.log(process.env.HARPERDB_URL);
+
 const express = require("express");
 const app = express();
 const http = require("http");
 const cors = require("cors");
 const { Server } = require("socket.io");
+
+const harperSaveMessage = require("./services/harper-save-message");
+const harperGetMessages = require("./services/harper-get-message");
 
 app.use(cors());
 
@@ -54,6 +60,21 @@ io.on("connection", (socket) => {
     charRoomUsers = allUsers.filter((user) => user.room === room);
     socket.to(room).emit("chatroom_users", charRoomUsers);
     socket.emit("chatroom_users", charRoomUsers); //doubt why repeating line above??? DOUBT
+
+    socket.on("send_message", (data) => {
+      const { message, username, room, __createdtime__ } = data;
+      io.in(room).emit("receive_message", data); // Send to all users in room, including sender
+      harperSaveMessage(message, username, room, __createdtime__) // Save message in db
+        .then((response) => console.log(response))
+        .catch((err) => console.log(err));
+    });
+
+    harperGetMessages(room)
+      .then((last100Messages) => {
+        // console.log('latest messages', last100Messages);
+        socket.emit("last_100_messages", last100Messages);
+      })
+      .catch((err) => console.log(err));
   });
 });
 
